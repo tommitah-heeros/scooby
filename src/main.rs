@@ -37,11 +37,6 @@ struct Cli {
     say_it: Option<String>,
 
     //// OPTIONAL ARGS w/ flags
-    // optional arguments are wrapped with `Option`
-
-    // todo: file name for a config file, could be a .toml?
-    // config file should hold stuff like headers and base url for the service
-    // we're attempting to access.
     #[arg(short, long)]
     dev_prefix: Option<bool>,
 
