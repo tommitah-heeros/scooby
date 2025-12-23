@@ -1,7 +1,6 @@
+use chrono::{DateTime, Utc};
 use colored::Colorize;
-use std::env;
-use std::error::Error;
-use std::path::Path;
+use std::{env, error::Error, path::Path, time::SystemTime};
 use tokio::fs;
 use turso::{Builder, Connection};
 
@@ -71,7 +70,7 @@ pub async fn store_run_into_db(
     let json_string =
         serde_json::to_string(&res.body).expect("Couldn't parse json value back into string.");
 
-    let now: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
+    let now: DateTime<Utc> = SystemTime::now().into();
     let created_at = now.to_rfc3339();
 
     db.execute(

@@ -1,16 +1,17 @@
-use reqwest::Response;
+use reqwest::{Response, StatusCode, header::HeaderMap};
+use serde_json::Value;
 use std::error::Error;
 
 pub struct ResponseParts {
-    pub status: reqwest::StatusCode,
-    pub headers: reqwest::header::HeaderMap,
-    pub body: serde_json::Value,
+    pub status: StatusCode,
+    pub headers: HeaderMap,
+    pub body: Value,
 }
 
 pub async fn split_http_response(res: Response) -> Result<ResponseParts, Box<dyn Error>> {
     let status = res.status();
     let headers = res.headers().clone();
-    let body: serde_json::Value = res.json().await.expect("Output json format was incorrect.");
+    let body: Value = res.json().await.expect("Output json format was incorrect.");
 
     Ok(ResponseParts {
         status,
