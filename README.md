@@ -1,4 +1,7 @@
-# Running turso locally
+# Word of caution
+This is the authors "first" project in Rust, it sucks.
+
+## Running turso locally
 ```bash
 turso dev --db-file <path>
 ```
