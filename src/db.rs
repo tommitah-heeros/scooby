@@ -1,11 +1,12 @@
 use chrono::{DateTime, Utc};
+use clap::ArgMatches;
 use colored::Colorize;
+use reqwest::Method;
 use std::{env, error::Error, path::Path, time::SystemTime};
 use tokio::fs;
 use turso::{Builder, Connection};
 
-use crate::cli::Cli;
-use crate::http::ResponseParts;
+use crate::{cli::ModularService, http::ResponseParts};
 
 // todo: for now this is a "C-style" library file, but should probably refactor it into a proper
 // db layer.
@@ -55,7 +56,7 @@ pub async fn setup_tables(db: &Connection) -> Result<(), Box<dyn Error>> {
 
 pub async fn store_run_into_db(
     db: &Connection,
-    cli_args: Cli,
+    cli_args: ArgMatches,
     res: ResponseParts,
 ) -> Result<(), Box<dyn Error>> {
     const SQL_STR: &str = "INSERT INTO requests (
@@ -73,12 +74,18 @@ pub async fn store_run_into_db(
     let now: DateTime<Utc> = SystemTime::now().into();
     let created_at = now.to_rfc3339();
 
+    let method = cli_args.get_one::<Method>("method").expect("required");
+    let service = cli_args
+        .get_one::<ModularService>("service")
+        .expect("required");
+    let route_url = cli_args.get_one::<String>("route_url").expect("required");
+
     db.execute(
         SQL_STR,
         (
-            cli_args.method.as_str(),
-            cli_args.service.as_ref(),
-            String::from(cli_args.route_url),
+            method.clone().as_str(),
+            service.clone().as_ref(),
+            route_url.clone(),
             "full_url",
             json_string,
             created_at,

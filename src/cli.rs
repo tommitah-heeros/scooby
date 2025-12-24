@@ -1,4 +1,4 @@
-use clap::{Parser, ValueEnum};
+use clap::{Arg, Command, ValueEnum};
 use reqwest::Method;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -20,37 +20,46 @@ impl AsRef<str> for ModularService {
     }
 }
 
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-pub struct Cli {
-    //// MANDATORY ARGS w/o flags
-    #[arg(value_enum)]
-    pub method: Method,
-
-    #[arg(value_enum)]
-    pub service: ModularService,
-
-    #[arg()]
-    pub route_url: String,
-
-    #[arg()]
-    pub say_it: Option<String>,
-
-    //// OPTIONAL ARGS w/ flags
-    #[arg(short, long)]
-    pub dev_prefix: Option<bool>,
-
-    #[arg(short, long)]
-    pub ltpa: Option<String>,
-
-    #[arg(short, long)]
-    pub server_env: Option<String>,
-
-    #[arg(short, long)]
-    pub qsp: Option<String>,
-    #[arg(short, long)]
-    pub payload_path: Option<String>,
-
-    #[arg(short, long)]
-    pub flush_storage: Option<bool>,
+pub fn parse_cli_input() -> Command {
+    Command::new("Scooby HTTP Service Client")
+        .version("0.1.0")
+        .about("Performs http queries in the Modular environment")
+        .arg(
+            Arg::new("method")
+                .value_parser(clap::value_parser!(Method))
+                .required(true),
+        )
+        .arg(
+            Arg::new("service")
+                .value_parser(clap::value_parser!(ModularService))
+                .required(true),
+        )
+        .arg(Arg::new("route_url").required(true))
+        .arg(
+            Arg::new("dev_prefix")
+                .short('d')
+                .long("dev_prefix")
+                .default_value("tommitah-"),
+        )
+        // .arg(
+        //     Arg::new("header_auth_token")
+        //         .short('t')
+        //         .long("auth_token")
+        //         .value_parser(clap::value_parser!(Option<String>)),
+        // )
+        .arg(Arg::new("server_env").short('e').long("env"))
+        .arg(Arg::new("qsp").short('q').long("qsp"))
+        .arg(
+            Arg::new("payload_path")
+                .short('p')
+                .long("payload_path")
+                .required_if_eq("method", "POST"),
+        )
+    // .arg(
+    //     Arg::new("flush_storage")
+    //         .short('f')
+    //         .long("flush")
+    //         .value_parser(clap::value_parser!(bool))
+    //         .default_value(false),
+    // )
 }

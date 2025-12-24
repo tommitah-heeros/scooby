@@ -1,20 +1,23 @@
-use clap::Parser;
 use colored::Colorize;
-use reqwest::Client;
+use reqwest::Method;
 use std::env;
 use tokio::fs;
 
 mod cli;
-use crate::cli::Cli;
+use crate::cli::{ModularService, parse_cli_input};
 
 mod formatting;
 use crate::formatting::pretty_print_response;
 
 mod http;
-use crate::http::split_http_response;
+use crate::http::{HttpClientParams, create_http_client, split_http_response};
 
 mod db;
 use crate::db::{create_db_connection, setup_tables, store_run_into_db};
+
+// this whole thing should probably be refactored with no `expect`'s and no `unwrap`'s
+// Also would be nice to figure out if the Cli part is supposed to be wrapped at all and what is
+// the safest way to make sure the types are correct at compile time.
 
 #[tokio::main]
 async fn main() -> Result<(), reqwest::Error> {
@@ -26,52 +29,55 @@ async fn main() -> Result<(), reqwest::Error> {
         .await
         .expect(&"Ruh roh, table setup pooped.".red());
 
-    let args = Cli::parse();
+    let args = parse_cli_input().get_matches();
 
-    let cli_ltpa_token = args.ltpa.clone();
-    let ltpa_token = cli_ltpa_token
-        .or_else(|| env::var("ltpa_token").ok())
-        .unwrap_or_else(|| {
-            eprintln!("Giff ltpa you bastard");
-            std::process::exit(1);
-        });
-
-    let http_client = Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .default_headers({
-            let mut headers = reqwest::header::HeaderMap::new();
-            headers.insert("Cookie", format!("LtpaToken={ltpa_token}").parse().unwrap());
-            headers
-        })
-        .build()?;
-
-    let service_name = args.service.as_ref();
-    let service_url = match args.dev_prefix {
-        Some(false) => String::from(service_name),
-        _ => format!("tommitah-{service_name}"),
+    let args_method = args.get_one::<Method>("method").expect("required");
+    let auth_token = if env::var("ltpa_token").is_ok() {
+        env::var("ltpa_token")
+    } else {
+        eprintln!("giff ltpa you bastard");
+        std::process::exit(1);
     };
 
-    let cli_server_env = args.server_env.clone();
-    let server_env = match cli_server_env {
-        Some(value) => value,
+    let args_service = args.get_one::<ModularService>("service").expect("required");
+    let args_prefix = args.get_one::<String>("dev_prefix");
+    let service_url = match args_prefix {
+        None => String::from(args_service.as_ref()),
+        Some(stack_prefix) => {
+            let ser_ref = args_service.as_ref();
+            format!("{stack_prefix}{ser_ref}")
+        }
+    };
+
+    let args_server_env = args.get_one::<String>("server_env");
+    let args_server_env = match args_server_env {
+        Some(value) => value.clone(), // oof
         _ => String::from("dev"),
     };
-    let base_url = format!("https://api.{server_env}.heeros.com/");
+    let base_url = format!("https://api.{args_server_env}.heeros.com/");
 
-    let resource_url = args.route_url.clone();
+    let args_route_url = args.get_one::<String>("route_url").expect("required");
 
-    let cli_qsp_url = args.qsp.clone();
-    let qsp_url = match cli_qsp_url {
-        Some(value) => value,
+    let args_qsp_url = args.get_one::<String>("qsp");
+    let qsp_url = match args_qsp_url {
+        Some(value) => value.clone(), // oof
         _ => String::from(""),
     };
 
-    let url = format!("{base_url}{service_url}/{resource_url}{qsp_url}");
+    let args_payload_path = args.get_one::<String>("payload_path");
+
+    let url = format!("{base_url}{service_url}/{args_route_url}{qsp_url}");
     println!("\nRequesting: {}\n", url.purple());
 
-    let mut req_builder = http_client.request(args.method.clone(), url);
+    let http_params = HttpClientParams {
+        timeout_secs: 15,
+        token: auth_token.expect("required"), // oof...
+    };
+    let http_client = create_http_client(http_params);
 
-    if let Some(payload_path) = args.payload_path.as_deref() {
+    let mut req_builder = http_client.request(args_method.clone(), url);
+
+    if let Some(payload_path) = args_payload_path {
         let payload = fs::read_to_string(payload_path)
             .await
             .expect("Expected a valid error path.");
@@ -90,10 +96,6 @@ async fn main() -> Result<(), reqwest::Error> {
     pretty_print_response(&parts)
         .await
         .expect("Ruh roh, couldn't print results!");
-
-    if let Some(say_it) = args.say_it.as_deref() {
-        println!("Ruh roh {}, where are my rhesticles?!", say_it);
-    }
 
     store_run_into_db(&db, args, parts)
         .await
