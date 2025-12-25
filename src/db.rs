@@ -162,6 +162,7 @@ pub async fn get_all_entries_by_time_range(
     let mut rows = conn.query(SQL_STR, [since]).await?;
     let mut output = Vec::new();
 
+    // something tells me this is not a safe way to do this...
     while let Some(row) = rows.next().await? {
         let method: String = row.get(1)?;
         let service: String = row.get(2)?;
