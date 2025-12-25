@@ -3,6 +3,7 @@ mod db;
 mod formatting;
 mod http;
 
+use chrono::{DateTime, NaiveDate, Utc};
 use clap::Parser;
 use colored::Colorize;
 use std::env;
@@ -10,11 +11,13 @@ use tokio::fs;
 
 use formatting::pretty_print_response;
 
-use db::{create_db_connection, setup_tables, store_run_into_db};
+use db::{
+    DbStoreArgs, create_db_connection, get_all_entries_by_time_range, setup_tables,
+    store_run_into_db,
+};
 use http::{HttpClientParams, create_http_client, split_http_response};
 
 use cli::{AskCommand, ModeType, ReqCommand, ScoobyArgs};
-use db::DbStoreArgs;
 
 async fn handle_req_mode(cli: ReqCommand) {
     let db = create_db_connection()
@@ -95,8 +98,39 @@ async fn handle_req_mode(cli: ReqCommand) {
     }
 }
 
-async fn handle_ask_mode(_cli: AskCommand) {
-    todo!("this is not implemented yet!");
+fn date_to_utc_start(s: String) -> Result<DateTime<Utc>, chrono::ParseError> {
+    let date = NaiveDate::parse_from_str(s.as_str(), "%Y-%m-%d")?;
+    let date_time = DateTime::from_naive_utc_and_offset(date.and_hms_opt(0, 0, 0).unwrap(), Utc);
+    Ok(date_time)
+}
+
+async fn handle_ask_mode(cli: AskCommand) {
+    let db = create_db_connection()
+        .await
+        .expect(&"Ruh roh, DB startup pooped.".red());
+
+    setup_tables(&db)
+        .await
+        .expect(&"Ruh roh, table setup pooped.".red());
+
+    match cli {
+        AskCommand::ListAll(cli) => {
+            let date_time = if let Ok(date_time) = date_to_utc_start(cli.time_range) {
+                date_time
+            } else {
+                panic!("Something went wrong parsing date input")
+            };
+
+            let list = get_all_entries_by_time_range(&db, date_time)
+                .await
+                .expect("bar");
+
+            for entry in list {
+                println!("{}", entry);
+            }
+        }
+        AskCommand::ListByService(cli) => todo!("foo"),
+    };
 }
 
 #[tokio::main]

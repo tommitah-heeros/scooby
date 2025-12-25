@@ -50,6 +50,7 @@ pub enum ModeType {
     Req(ReqCommand),
 
     /// Query, view and export previous requests.
+    #[clap(subcommand)]
     Ask(AskCommand),
 }
 
@@ -91,8 +92,24 @@ pub struct ReqCommand {
 }
 
 #[derive(Debug, Args)]
-pub struct AskCommand {
-    // this is just for getting output from turso
+pub struct ListAllCommand {
+    #[arg()]
+    pub time_range: String,
+}
+
+#[derive(Debug, Args)]
+pub struct ListByServiceCommand {
+    #[arg()]
+    pub time_range: String,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AskCommand {
+    /// List all requests made
+    ListAll(ListAllCommand),
+
+    /// List all requests made to a specific service
+    ListByService(ListByServiceCommand),
 }
 
 // Instead of this approach, we should prefer deriving clap::Parser and just using it straight

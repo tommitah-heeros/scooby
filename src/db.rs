@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use colored::Colorize;
-use std::{env, error::Error, path::Path, time::SystemTime};
+use colored_json::to_colored_json_auto;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, from_str};
+use std::{env, error::Error, fmt::Display, path::Path, time::SystemTime};
 use tokio::fs;
 use turso::{Builder, Connection};
 
@@ -32,7 +35,7 @@ pub async fn create_db_connection() -> Result<Connection, Box<dyn Error>> {
     Ok(conn)
 }
 
-pub async fn setup_tables(db: &Connection) -> Result<(), Box<dyn Error>> {
+pub async fn setup_tables(conn: &Connection) -> Result<(), Box<dyn Error>> {
     const SQL_STR: &str = "CREATE TABLE IF NOT EXISTS requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         method TEXT NOT NULL,
@@ -44,7 +47,7 @@ pub async fn setup_tables(db: &Connection) -> Result<(), Box<dyn Error>> {
         created_at TEXT NOT NULL
     )";
 
-    db.execute(SQL_STR, ())
+    conn.execute(SQL_STR, ())
         .await
         .expect("Couldn't setup tables.");
 
@@ -62,7 +65,7 @@ pub struct DbStoreArgs {
 }
 
 pub async fn store_run_into_db(
-    db: &Connection,
+    conn: &Connection,
     store_args: DbStoreArgs,
     res: ResponseParts,
 ) -> Result<(), Box<dyn Error>> {
@@ -84,7 +87,7 @@ pub async fn store_run_into_db(
     let now: DateTime<Utc> = SystemTime::now().into();
     let created_at = now.to_rfc3339();
 
-    db.execute(
+    conn.execute(
         SQL_STR,
         (
             store_args.method,
@@ -100,4 +103,92 @@ pub async fn store_run_into_db(
     .expect(&"Ruh roh, couldn't store values in db!".red());
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Request {
+    method: String,
+    service: String,
+    route_url: String,
+    url: String,
+    payload_json: Option<Value>,
+    response_json: Option<Value>,
+    created_at: DateTime<Utc>,
+}
+
+fn colored_json_opt(v: &Option<Value>) -> String {
+    match v {
+        None => "null".into(),
+        Some(val) => to_colored_json_auto(val).unwrap_or_else(|_| "<invalid json>".into()),
+    }
+}
+
+impl Display for Request {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "[{}] {} {} {}",
+            self.created_at,
+            self.method.purple(),
+            self.service.green(),
+            self.url.yellow()
+        )?;
+
+        writeln!(f, "  payload: {}", colored_json_opt(&self.payload_json))?;
+        writeln!(f, "  response: {}", colored_json_opt(&self.response_json))?;
+
+        Ok(())
+    }
+}
+
+fn parse_json_opt(s: Option<String>) -> Result<Option<Value>, serde_json::Error> {
+    match s {
+        None => Ok(None),
+        Some(txt) => {
+            let v = from_str(&txt).map(Some)?;
+            Ok(v)
+        }
+    }
+}
+
+pub async fn get_all_entries_by_time_range(
+    conn: &Connection,
+    time: DateTime<Utc>,
+) -> Result<Vec<Request>, Box<dyn Error>> {
+    const SQL_STR: &str = "SELECT * FROM requests WHERE created_at > ?1 ORDER BY created_at ASC";
+
+    let since = time.to_rfc3339();
+
+    let mut rows = conn.query(SQL_STR, [since]).await?;
+    let mut output = Vec::new();
+
+    while let Some(row) = rows.next().await? {
+        let method: String = row.get(1)?;
+        let service: String = row.get(2)?;
+        let route_url: String = row.get(3)?;
+        let url: String = row.get(4)?;
+
+        let payload_text: Option<String> = row.get(5)?;
+        let payload_json = parse_json_opt(payload_text)?;
+
+        let response_text: Option<String> = row.get(6)?;
+        let response_json = parse_json_opt(response_text)?;
+
+        let created_at_text: String = row.get(7)?;
+        let created_at = created_at_text
+            .parse::<DateTime<Utc>>()
+            .expect("Db data deserialization failed for created_at");
+
+        output.push(Request {
+            method,
+            service,
+            route_url,
+            url,
+            payload_json,
+            response_json,
+            created_at,
+        })
+    }
+
+    Ok(output)
 }
