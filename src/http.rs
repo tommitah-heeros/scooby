@@ -24,8 +24,8 @@ pub fn create_http_client(params: HttpClientParams) -> Client {
         .build();
 
     match http_client {
-        Ok(inst) => inst,
-        Err(_) => panic!("Http client instance not available."),
+        Ok(client) => client,
+        Err(_) => panic!("Couldn't construct an http client instance"),
     }
 }
 

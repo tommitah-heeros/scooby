@@ -37,15 +37,11 @@ async fn handle_req_mode(cli: ReqCommand) {
 
     let base_url = format!("https://api.{}.heeros.com/", cli.server_env.as_ref());
 
-    let route = cli.route_url;
-
-    let payload_path = cli.payload_path;
-
     let url = format!(
         "{}{}/{}{}",
         base_url,
         service_url,
-        route,
+        cli.route_url,
         cli.qsp.unwrap_or_else(String::new)
     );
     println!("\nRequesting: {}\n", url.purple());
@@ -59,7 +55,7 @@ async fn handle_req_mode(cli: ReqCommand) {
     let mut req_builder = http_client.request(cli.method.clone(), url.clone());
     let mut json_payload: Option<serde_json::Value> = None;
 
-    if let Some(path) = payload_path {
+    if let Some(path) = cli.payload_path {
         let payload = fs::read_to_string(path)
             .await
             .expect("Expected a valid error path.");
@@ -86,7 +82,7 @@ async fn handle_req_mode(cli: ReqCommand) {
                 method: cli.method.to_string(),
                 service: service_name.to_string(),
                 url,
-                route_url: route,
+                route_url: cli.route_url,
                 payload: json_payload,
             };
             store_run_into_db(&db, db_store_args, parts)
