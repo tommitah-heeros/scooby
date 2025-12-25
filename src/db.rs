@@ -1,12 +1,10 @@
 use chrono::{DateTime, Utc};
-use clap::ArgMatches;
 use colored::Colorize;
-use reqwest::Method;
 use std::{env, error::Error, path::Path, time::SystemTime};
 use tokio::fs;
 use turso::{Builder, Connection};
 
-use crate::{cli::ModularService, http::ResponseParts};
+use crate::http::ResponseParts;
 
 // todo: for now this is a "C-style" library file, but should probably refactor it into a proper
 // db layer.
@@ -41,6 +39,7 @@ pub async fn setup_tables(db: &Connection) -> Result<(), Box<dyn Error>> {
         service TEXT NOT NULL,
         route_url TEXT NOT NULL,
         full_url TEXT NOT NULL,
+        payload TEXT,
         response_json TEXT,
         created_at TEXT NOT NULL
     )";
@@ -54,9 +53,17 @@ pub async fn setup_tables(db: &Connection) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+pub struct DbStoreArgs {
+    pub method: String,
+    pub service: String,
+    pub url: String,
+    pub route_url: String,
+    pub payload: Option<serde_json::Value>,
+}
+
 pub async fn store_run_into_db(
     db: &Connection,
-    cli_args: ArgMatches,
+    store_args: DbStoreArgs,
     res: ResponseParts,
 ) -> Result<(), Box<dyn Error>> {
     const SQL_STR: &str = "INSERT INTO requests (
@@ -64,30 +71,28 @@ pub async fn store_run_into_db(
         service,
         route_url,
         full_url,
+        payload,
         response_json,
         created_at
-    ) VALUES (?, ?, ?, ?, ?, ?)";
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-    let json_string =
+    let payload_json_string = serde_json::to_string(&store_args.payload)
+        .expect("Couldn't parse json value back into string");
+    let response_json_string =
         serde_json::to_string(&res.body).expect("Couldn't parse json value back into string.");
 
     let now: DateTime<Utc> = SystemTime::now().into();
     let created_at = now.to_rfc3339();
 
-    let method = cli_args.get_one::<Method>("method").expect("required");
-    let service = cli_args
-        .get_one::<ModularService>("service")
-        .expect("required");
-    let route_url = cli_args.get_one::<String>("route_url").expect("required");
-
     db.execute(
         SQL_STR,
         (
-            method.clone().as_str(),
-            service.clone().as_ref(),
-            route_url.clone(),
-            "full_url",
-            json_string,
+            store_args.method,
+            store_args.service,
+            store_args.route_url,
+            store_args.url,
+            payload_json_string,
+            response_json_string,
             created_at,
         ),
     )

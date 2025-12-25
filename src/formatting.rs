@@ -1,40 +1,8 @@
 use colored::{Color, Colorize};
+use colored_json::to_colored_json_auto;
 use std::error::Error;
 
 use crate::http::ResponseParts;
-
-fn print_colorized_json(pretty_json: &str) {
-    for line in pretty_json.lines() {
-        let mut colored_line = String::new();
-
-        let mut in_string = false;
-        for c in line.chars() {
-            match c {
-                '"' => {
-                    in_string = !in_string;
-                    colored_line.push_str(&c.to_string().green().to_string());
-                }
-                ':' if !in_string => {
-                    colored_line.push_str(&c.to_string().white().to_string());
-                }
-                ',' if !in_string => {
-                    colored_line.push_str(&c.to_string().white().to_string());
-                }
-                _ if in_string => {
-                    colored_line.push_str(&c.to_string().green().to_string());
-                }
-                _ if c.is_numeric() => {
-                    colored_line.push_str(&c.to_string().yellow().to_string());
-                }
-                _ => {
-                    colored_line.push(c);
-                }
-            }
-        }
-
-        println!("{}", colored_line);
-    }
-}
 
 pub async fn pretty_print_response(parts: &ResponseParts) -> Result<(), Box<dyn Error>> {
     let status_color = if parts.status.is_success() {
@@ -57,8 +25,7 @@ pub async fn pretty_print_response(parts: &ResponseParts) -> Result<(), Box<dyn 
 
     println!();
 
-    let pretty = serde_json::to_string_pretty(&parts.body).expect("Output json format incorrect.");
-    println!("{:?}", print_colorized_json(&pretty));
+    println!("{}", to_colored_json_auto(&parts.body)?);
 
     Ok(())
 }

@@ -1,4 +1,4 @@
-use clap::{Arg, Command, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use reqwest::Method;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -20,46 +20,82 @@ impl AsRef<str> for ModularService {
     }
 }
 
-pub fn parse_cli_input() -> Command {
-    Command::new("Scooby HTTP Service Client")
-        .version("0.1.0")
-        .about("Performs http queries in the Modular environment")
-        .arg(
-            Arg::new("method")
-                .value_parser(clap::value_parser!(Method))
-                .required(true),
-        )
-        .arg(
-            Arg::new("service")
-                .value_parser(clap::value_parser!(ModularService))
-                .required(true),
-        )
-        .arg(Arg::new("route_url").required(true))
-        .arg(
-            Arg::new("dev_prefix")
-                .short('d')
-                .long("dev_prefix")
-                .default_value("tommitah-"),
-        )
-        // .arg(
-        //     Arg::new("header_auth_token")
-        //         .short('t')
-        //         .long("auth_token")
-        //         .value_parser(clap::value_parser!(Option<String>)),
-        // )
-        .arg(Arg::new("server_env").short('e').long("env"))
-        .arg(Arg::new("qsp").short('q').long("qsp"))
-        .arg(
-            Arg::new("payload_path")
-                .short('p')
-                .long("payload_path")
-                .required_if_eq("method", "POST"),
-        )
-    // .arg(
-    //     Arg::new("flush_storage")
-    //         .short('f')
-    //         .long("flush")
-    //         .value_parser(clap::value_parser!(bool))
-    //         .default_value(false),
-    // )
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum ServerEnv {
+    Dev,
+    Test,
+    Prod,
 }
+
+impl AsRef<str> for ServerEnv {
+    fn as_ref(&self) -> &str {
+        match self {
+            ServerEnv::Dev => "dev",
+            ServerEnv::Test => "test",
+            ServerEnv::Prod => "cloud",
+        }
+    }
+}
+
+#[derive(Debug, Parser)]
+#[clap(author, version, about)]
+pub struct ScoobyArgs {
+    #[clap(subcommand)]
+    pub mode_type: ModeType,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ModeType {
+    /// Create and process HTTP requests to Modular services
+    Req(ReqCommand),
+
+    /// Query, view and export previous requests.
+    Ask(AskCommand),
+}
+
+#[derive(Debug, Args)]
+pub struct ReqCommand {
+    // for now, use the simple version
+    /// HTTP Method
+    #[arg(value_enum)]
+    pub method: Method, // todo: this might just be a subcommand, so we can have separate args for different methods.
+
+    /// Which Modular service to query
+    #[arg(value_enum)]
+    pub service: ModularService,
+
+    /// Resource route
+    #[arg()]
+    pub route_url: String,
+
+    /// Dev-stack prefix, defaults to "tommitah-"
+    #[arg(short('d'), long("dev"), default_value("tommitah-"))]
+    pub dev_prefix: String,
+
+    /// Server environment, defaults to dev
+    #[arg(short('s'), long("server"), value_enum, default_value = "dev")]
+    pub server_env: ServerEnv,
+
+    /// Querystring parameters
+    #[arg(short, long)]
+    pub qsp: Option<String>,
+
+    /// Where to look for json payload
+    #[arg(
+        short('p'),
+        long("payload"),
+        required_if_eq("method", "POST"),
+        required_if_eq("method", "PATCH")
+    )]
+    pub payload_path: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct AskCommand {
+    // this is just for getting output from turso
+}
+
+// Instead of this approach, we should prefer deriving clap::Parser and just using it straight
+// in the main entry.
+//
+// Also the struct extending seems to be a lot cleaner and safer for the consuming code.
