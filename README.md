@@ -28,6 +28,14 @@ Requirements:
 
 ---
 
+## Configuration
+Add a `auth_token` variable to your shell that populates a Cookie header.
+
+Make sure to configure your service names in `~/.config/scooby/config.toml` like the following:
+```toml
+my_service = "someurlpart"
+```
+
 ## Quick Start
 
 Scooby is organized around **subcommands**:

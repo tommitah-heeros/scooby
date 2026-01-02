@@ -9,17 +9,10 @@ pub struct ResponseParts {
 }
 
 pub fn create_http_client(timeout_secs: u64) -> Client {
-    let auth_token = if std::env::var("ltpa_token").is_ok() {
-        std::env::var("ltpa_token")
-    } else {
-        eprintln!("giff ltpa you bastard");
-        std::process::exit(1);
-    };
-
-    let cookie_value = match auth_token {
+    let cookie_value = match std::env::var("auth_token") {
         Ok(token) => token,
         Err(err) => {
-            eprintln!("No auth token found, couln't construct headers {}", err);
+            eprintln!("No auth token found, couldn't construct headers {}", err);
             std::process::exit(1)
         }
     };
@@ -28,10 +21,7 @@ pub fn create_http_client(timeout_secs: u64) -> Client {
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .default_headers({
             let mut headers = reqwest::header::HeaderMap::new();
-            headers.insert(
-                "Cookie",
-                format!("LtpaToken={cookie_value}").parse().unwrap(),
-            );
+            headers.insert("Cookie", cookie_value.parse().unwrap());
             headers
         })
         .build();
