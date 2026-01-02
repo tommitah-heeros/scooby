@@ -32,6 +32,25 @@ pub struct ScoobyRequest {
     created_at: DateTime<Utc>,
 }
 
+pub struct UiDisplayRequest {
+    pub key: String,
+    pub content: Option<Value>,
+    pub response: Option<Value>,
+}
+
+pub fn to_ui_displayable(data: Vec<ScoobyRequest>) -> Vec<UiDisplayRequest> {
+    data.iter()
+        .map(|item| UiDisplayRequest {
+            key: format!(
+                "{} {} {} {} {}",
+                item.method, item.service, item.route_url, item.created_at, item.route_url,
+            ),
+            content: item.payload_json.clone(),
+            response: item.response_json.clone(),
+        })
+        .collect()
+}
+
 fn colored_json_opt(v: &Option<Value>) -> String {
     match v {
         None => "null".into(),
@@ -153,9 +172,28 @@ impl Db {
                 ),
             )
             .await
-            .expect(&"Ruh roh, couldn't store values in db!".red());
+            .unwrap_or_else(|_| panic!("{}", "Ruh roh, couldn't store values in db!".red()));
 
         Ok(())
+    }
+
+    pub async fn get_all_entries(&self) -> Result<Vec<ScoobyRequest>, Box<dyn Error>> {
+        const SQL_STR: &str = "SELECT * FROM requests";
+
+        let mut rows = self.conn.query(SQL_STR, [1]).await?;
+        let mut output = Vec::new();
+
+        while let Some(row) = rows.next().await? {
+            let data = match Db::map_to_domain(row).await {
+                Ok(mapped) => mapped,
+                Err(err) => {
+                    panic!("Something went wrong mapping data to domain: {}", err)
+                }
+            };
+            output.push(data);
+        }
+
+        Ok(output)
     }
 
     pub async fn get_all_entries_by_time_range(
@@ -170,7 +208,6 @@ impl Db {
         let mut rows = self.conn.query(SQL_STR, [since]).await?;
         let mut output = Vec::new();
 
-        // something tells me this is not a safe way to do this...
         while let Some(row) = rows.next().await? {
             let data = match Db::map_to_domain(row).await {
                 Ok(mapped) => mapped,

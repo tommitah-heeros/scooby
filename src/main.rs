@@ -138,7 +138,7 @@ async fn handle_db_mode(cli: DbCommand, cfg: Cfg) {
             }
         }
         DbCommand::Ui(_cli) => {
-            let _ = Ui::run();
+            let _ = Ui::run(&db);
         }
     };
 }
