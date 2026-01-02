@@ -8,31 +8,47 @@ pub struct ResponseParts {
     pub body: Value,
 }
 
-pub struct HttpClientParams {
-    pub timeout_secs: u64,
-    pub token: String,
-}
-pub fn create_http_client(params: HttpClientParams) -> Client {
-    let token = params.token;
+pub fn create_http_client(timeout_secs: u64) -> Client {
+    let auth_token = if std::env::var("ltpa_token").is_ok() {
+        std::env::var("ltpa_token")
+    } else {
+        eprintln!("giff ltpa you bastard");
+        std::process::exit(1);
+    };
+
+    let cookie_value = match auth_token {
+        Ok(token) => token,
+        Err(err) => {
+            eprintln!("No auth token found, couln't construct headers {}", err);
+            std::process::exit(1)
+        }
+    };
+
     let http_client = Client::builder()
-        .timeout(std::time::Duration::from_secs(params.timeout_secs))
+        .timeout(std::time::Duration::from_secs(timeout_secs))
         .default_headers({
             let mut headers = reqwest::header::HeaderMap::new();
-            headers.insert("Cookie", format!("LtpaToken={token}").parse().unwrap());
+            headers.insert(
+                "Cookie",
+                format!("LtpaToken={cookie_value}").parse().unwrap(),
+            );
             headers
         })
         .build();
 
     match http_client {
         Ok(client) => client,
-        Err(_) => panic!("Couldn't construct an http client instance"),
+        Err(err) => {
+            eprintln!("Couldn't construct an http client instance {}", err);
+            std::process::exit(1)
+        }
     }
 }
 
 pub async fn split_http_response(res: Response) -> Result<ResponseParts, Box<dyn Error>> {
     let status = res.status();
     let headers = res.headers().clone();
-    let body: Value = res.json().await.expect("Output json format was incorrect.");
+    let body = res.json().await?;
 
     Ok(ResponseParts {
         status,

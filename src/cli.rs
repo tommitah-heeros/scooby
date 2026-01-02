@@ -2,25 +2,6 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use reqwest::Method;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum ModularService {
-    HPI,
-    HSI,
-    CR,
-    CIS,
-}
-
-impl AsRef<str> for ModularService {
-    fn as_ref(&self) -> &str {
-        match self {
-            ModularService::HPI => "windmill-service-v1",
-            ModularService::HSI => "sales-invoice-service-v1",
-            ModularService::CR => "cloudreader-v1",
-            ModularService::CIS => "circula-integration-service-v1",
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum ServerEnv {
     Dev,
     Test,
@@ -51,7 +32,7 @@ pub enum ModeType {
 
     /// Query, view and export previous requests.
     #[clap(subcommand)]
-    Ask(AskCommand),
+    Db(DbCommand),
 }
 
 #[derive(Debug, Args)]
@@ -61,16 +42,18 @@ pub struct ReqCommand {
     #[arg(value_enum)]
     pub method: Method, // todo: this might just be a subcommand, so we can have separate args for different methods.
 
-    /// Which Modular service to query
-    #[arg(value_enum)]
-    pub service: ModularService,
+    /// Target service. Intended use is to use an abbreviation which is linked to a
+    /// value in `config.toml`: `scooby req GET <my-abbr> some-resource/some-id`.
+    /// config.toml: my-abbr = "some-longer-part-of-url"
+    #[arg()]
+    pub service: String,
 
     /// Resource route
     #[arg()]
     pub route_url: String,
 
     /// Dev-stack prefix, defaults to "tommitah-"
-    #[arg(short('d'), long("dev"), default_value("tommitah-"))]
+    #[arg(short('d'), long("dev"), default_value(""))]
     pub dev_prefix: String,
 
     /// Server environment, defaults to dev
@@ -100,19 +83,16 @@ pub struct ListAllCommand {
 #[derive(Debug, Args)]
 pub struct ListByServiceCommand {
     #[arg()]
+    pub service: String,
+    #[arg()]
     pub time_range: String,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum AskCommand {
+pub enum DbCommand {
     /// List all requests made
     ListAll(ListAllCommand),
 
     /// List all requests made to a specific service
     ListByService(ListByServiceCommand),
 }
-
-// Instead of this approach, we should prefer deriving clap::Parser and just using it straight
-// in the main entry.
-//
-// Also the struct extending seems to be a lot cleaner and safer for the consuming code.

@@ -1,3 +1,4 @@
+mod cfg;
 mod cli;
 mod db;
 mod formatting;
@@ -6,37 +7,27 @@ mod http;
 use chrono::{DateTime, NaiveDate, Utc};
 use clap::Parser;
 use colored::Colorize;
-use std::env;
 use tokio::fs;
 
 use formatting::pretty_print_response;
 
-use db::{
-    DbStoreArgs, create_db_connection, get_all_entries_by_time_range, setup_tables,
-    store_run_into_db,
-};
-use http::{HttpClientParams, create_http_client, split_http_response};
+use cfg::Cfg;
+use db::{Db, DbStoreArgs};
+use http::{create_http_client, split_http_response};
 
-use cli::{AskCommand, ModeType, ReqCommand, ScoobyArgs};
+use cli::{DbCommand, ModeType, ReqCommand, ScoobyArgs};
 
-async fn handle_req_mode(cli: ReqCommand) {
-    let db = create_db_connection()
-        .await
-        .expect(&"Ruh roh, DB startup pooped.".red());
-
-    setup_tables(&db)
-        .await
-        .expect(&"Ruh roh, table setup pooped.".red());
-
-    let auth_token = if env::var("ltpa_token").is_ok() {
-        env::var("ltpa_token")
-    } else {
-        eprintln!("giff ltpa you bastard");
-        std::process::exit(1);
+async fn handle_req_mode(cli: ReqCommand, cfg: Cfg) {
+    let db_path = std::env::var("scooby_db_path")
+        .expect("Define local database path in shell config (export scooby_db_path=\"...\")");
+    let db = match Db::create_connection(db_path).await {
+        Ok(db) => db,
+        Err(err) => panic!("{}: {}", Colorize::red("Ruh roh, db isn't working"), err),
     };
 
-    let service_name = cli.service.as_ref();
-    let service_url = format!("{}{}", cli.dev_prefix, service_name);
+    // service url parts are stored in config data, user gets to choose the option to use
+    let service_name = cfg.get(&cli.service);
+    let service_url = format!("{}{}", cfg.get(&cli.dev_prefix), service_name);
 
     let base_url = format!("https://api.{}.heeros.com/", cli.server_env.as_ref());
 
@@ -49,11 +40,9 @@ async fn handle_req_mode(cli: ReqCommand) {
     );
     println!("\nRequesting: {}\n", url.purple());
 
-    let http_params = HttpClientParams {
-        timeout_secs: 15,
-        token: auth_token.expect("required"), // oof...
-    };
-    let http_client = create_http_client(http_params);
+    // longish timeout, the apis are quite slow sometimes...
+    let timeout_secs: u64 = 15;
+    let http_client = create_http_client(timeout_secs);
 
     let mut req_builder = http_client.request(cli.method.clone(), url.clone());
     let mut json_payload: Option<serde_json::Value> = None;
@@ -63,8 +52,8 @@ async fn handle_req_mode(cli: ReqCommand) {
             .await
             .expect("Expected a valid error path.");
 
-        let json: serde_json::Value =
-            serde_json::from_str(&payload).expect(&"JSON payload not correctly formatted!".red());
+        let json: serde_json::Value = serde_json::from_str(&payload)
+            .expect(&Colorize::red("JSON payload not correctly formatted!"));
         req_builder = req_builder.json(&json);
         json_payload = Some(json);
     }
@@ -88,9 +77,9 @@ async fn handle_req_mode(cli: ReqCommand) {
                 route_url: cli.route_url,
                 payload: json_payload,
             };
-            store_run_into_db(&db, db_store_args, parts)
+            db.insert_args(db_store_args, parts)
                 .await
-                .expect(&"Ruh roh, couldn't insert run to db!".red());
+                .expect(&Colorize::red("Ruh roh, couldn't insert run to db!"));
 
             ()
         }
@@ -104,24 +93,24 @@ fn date_to_utc_start(s: String) -> Result<DateTime<Utc>, chrono::ParseError> {
     Ok(date_time)
 }
 
-async fn handle_ask_mode(cli: AskCommand) {
-    let db = create_db_connection()
-        .await
-        .expect(&"Ruh roh, DB startup pooped.".red());
-
-    setup_tables(&db)
-        .await
-        .expect(&"Ruh roh, table setup pooped.".red());
+async fn handle_db_mode(cli: DbCommand, cfg: Cfg) {
+    let db_path = std::env::var("scooby_db_path")
+        .expect("Define local database path in shell config (export scooby_db_path=\"...\")");
+    let db = match Db::create_connection(db_path).await {
+        Ok(db) => db,
+        Err(err) => panic!("{}: {}", Colorize::red("Ruh roh, db isn't working"), err),
+    };
 
     match cli {
-        AskCommand::ListAll(cli) => {
+        DbCommand::ListAll(cli) => {
             let date_time = if let Ok(date_time) = date_to_utc_start(cli.time_range) {
                 date_time
             } else {
                 panic!("Something went wrong parsing date input")
             };
 
-            let list = get_all_entries_by_time_range(&db, date_time)
+            let list = db
+                .get_all_entries_by_time_range(date_time)
                 .await
                 .expect("bar");
 
@@ -129,7 +118,22 @@ async fn handle_ask_mode(cli: AskCommand) {
                 println!("{}", entry);
             }
         }
-        AskCommand::ListByService(cli) => todo!("foo"),
+        DbCommand::ListByService(cli) => {
+            let date_time = if let Ok(date_time) = date_to_utc_start(cli.time_range) {
+                date_time
+            } else {
+                panic!("Something went wrong parsing date input")
+            };
+
+            let list = db
+                .get_all_entries_by_service(cfg.get(&cli.service), date_time)
+                .await
+                .expect("Data entries");
+
+            for entry in list {
+                println!("{}", entry)
+            }
+        }
     };
 }
 
@@ -137,12 +141,17 @@ async fn handle_ask_mode(cli: AskCommand) {
 async fn main() -> Result<(), reqwest::Error> {
     let args = ScoobyArgs::parse();
 
+    let home_dir = std::env::var("HOME").unwrap();
+    let file_path = format!("{home_dir}/.config/scooby/config");
+
+    let cfg = Cfg::parse_from_file(file_path);
+
     match args.mode_type {
         ModeType::Req(cli) => {
-            handle_req_mode(cli).await;
+            handle_req_mode(cli, cfg).await;
         }
-        ModeType::Ask(cli) => {
-            handle_ask_mode(cli).await;
+        ModeType::Db(cli) => {
+            handle_db_mode(cli, cfg).await;
         }
     }
 
