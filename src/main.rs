@@ -3,6 +3,7 @@ mod cli;
 mod db;
 mod formatting;
 mod http;
+mod ui;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use clap::Parser;
@@ -16,6 +17,8 @@ use db::{Db, DbStoreArgs};
 use http::{create_http_client, split_http_response};
 
 use cli::{DbCommand, ModeType, ReqCommand, ScoobyArgs};
+
+use ui::Ui;
 
 async fn handle_req_mode(cli: ReqCommand, cfg: Cfg) {
     let db_path = std::env::var("scooby_db_path")
@@ -133,6 +136,9 @@ async fn handle_db_mode(cli: DbCommand, cfg: Cfg) {
             for entry in list {
                 println!("{}", entry)
             }
+        }
+        DbCommand::Ui(_cli) => {
+            let _ = Ui::run();
         }
     };
 }

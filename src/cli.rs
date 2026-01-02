@@ -88,6 +88,11 @@ pub struct ListByServiceCommand {
     pub time_range: String,
 }
 
+#[derive(Debug, Args)]
+/// By default should render a TUI with all requests made in a list, that is browseable
+/// Supports an extra mode where user can raw dog turso with queries.
+pub struct UiCommand {}
+
 #[derive(Debug, Subcommand)]
 pub enum DbCommand {
     /// List all requests made
@@ -95,4 +100,7 @@ pub enum DbCommand {
 
     /// List all requests made to a specific service
     ListByService(ListByServiceCommand),
+
+    /// Render a TUI (powered by ratatui) to browse and search the stored data
+    Ui(UiCommand),
 }
