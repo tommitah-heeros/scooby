@@ -89,17 +89,21 @@ impl Db {
     }
 
     pub async fn create_connection(path: String) -> Result<Self, Box<dyn Error>> {
-        if !Path::new(&path).exists() {
-            fs::create_dir_all(&path).await.unwrap_or_else(|err| {
-                panic!("Failed to create scooby db directory at {}: {}", path, err)
-            })
+        const LOCAL_DB_DIR_PATH: &str = ".scooby";
+        let local_db_path = format!("{}/{}", std::env::var("HOME")?, LOCAL_DB_DIR_PATH);
+        if !Path::new(&local_db_path).exists() {
+            fs::create_dir_all(local_db_path.clone())
+                .await
+                .unwrap_or_else(|err| {
+                    panic!("Failed to create scooby db directory at {}: {}", path, err)
+                })
         }
 
-        let full_path = format!("{}/{}", path, "dooby.db");
-        let db = Builder::new_local(&full_path)
-            .build()
-            .await
-            .expect("Something went wrong initializing turso for scooby.");
+        let full_path = format!("{}/{}", local_db_path, "dooby.db");
+        let db = match Builder::new_local(&full_path).build().await {
+            Ok(db) => db,
+            Err(err) => panic!("Local database connection failed with: {}", err),
+        };
 
         let conn = db
             .connect()
