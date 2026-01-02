@@ -29,7 +29,7 @@ impl Cfg {
             Some(value) => value.to_string(),
             None => {
                 eprintln!("No value associated with config key {}", key_name);
-                return String::new();
+                String::new()
             }
         }
     }
