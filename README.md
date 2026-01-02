@@ -11,7 +11,7 @@ Scooby is a small Rust CLI for creating HTTP requests to services and exploring 
 From source:
 
 ```bash
-git clone https://github.com/<your-user>/scooby.git
+git clone https://github.com/tommitah-heeros/scooby.git
 cd scooby
 
 # Build release binary
