@@ -6,11 +6,20 @@ pub struct Cfg {
 }
 
 impl Cfg {
-    pub fn parse_from_file(path: String) -> Self {
+    pub fn parse_from_file() -> Self {
+        let home_dir = match std::env::var("HOME") {
+            Ok(value) => value,
+            Err(err) => {
+                eprintln!("Couldn't find HOME from shell environment: {}", err);
+                std::process::exit(1)
+            }
+        };
+        let file_path = format!("{home_dir}/.config/scooby/config");
+
         let file = Config::builder()
-            .add_source(config::File::with_name(&path))
+            .add_source(config::File::with_name(&file_path))
             .build()
-            .unwrap();
+            .unwrap_or_default();
 
         let opts = match file.try_deserialize() {
             Ok(cfg) => cfg,

@@ -96,25 +96,28 @@ impl Db {
         full_url TEXT NOT NULL,
         payload TEXT,
         response_json TEXT,
-        created_at TEXT NOT NULL
-    )";
+        created_at TEXT NOT NULL)";
 
-        self.conn
-            .execute(SQL_STR, ())
-            .await
-            .expect("Couldn't setup tables.");
-
-        Ok(())
+        match self.conn.execute(SQL_STR, ()).await {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                eprintln!("Couldn't setup tables: {}", err);
+                std::process::exit(1)
+            }
+        }
     }
 
-    pub async fn create_connection(path: String) -> Result<Self, Box<dyn Error>> {
+    pub async fn create_connection() -> Result<Self, Box<dyn Error>> {
         const LOCAL_DB_DIR_PATH: &str = ".scooby";
         let local_db_path = format!("{}/{}", std::env::var("HOME")?, LOCAL_DB_DIR_PATH);
         if !Path::new(&local_db_path).exists() {
             fs::create_dir_all(local_db_path.clone())
                 .await
                 .unwrap_or_else(|err| {
-                    panic!("Failed to create scooby db directory at {}: {}", path, err)
+                    panic!(
+                        "Failed to create scooby db directory at {}: {}",
+                        local_db_path, err
+                    )
                 })
         }
 
@@ -124,9 +127,13 @@ impl Db {
             Err(err) => panic!("Local database connection failed with: {}", err),
         };
 
-        let conn = db
-            .connect()
-            .expect("Something went wrong making a connection to database.");
+        let conn = match db.connect() {
+            Ok(conn) => conn,
+            Err(err) => {
+                eprintln!("Couldn't establish connection to db: {}", err);
+                std::process::exit(1)
+            }
+        };
 
         let db = Self { conn };
 
@@ -150,10 +157,8 @@ impl Db {
         created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-        let payload_json_string = serde_json::to_string(&store_args.payload)
-            .expect("Couldn't parse json value back into string");
-        let response_json_string =
-            serde_json::to_string(&res.body).expect("Couldn't parse json value back into string.");
+        let payload_json_string = serde_json::to_string(&store_args.payload)?;
+        let response_json_string = serde_json::to_string(&res.body)?;
 
         let now: DateTime<Utc> = SystemTime::now().into();
         let created_at = now.to_rfc3339();
@@ -260,9 +265,7 @@ impl Db {
         let response_json = parse_json_opt(response_text)?;
 
         let created_at_text: String = row.get(7)?;
-        let created_at = created_at_text
-            .parse::<DateTime<Utc>>()
-            .expect("Db data deserialization failed for created_at");
+        let created_at = created_at_text.parse::<DateTime<Utc>>()?;
 
         Ok(ScoobyRequest {
             method,

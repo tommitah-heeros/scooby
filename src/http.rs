@@ -21,7 +21,9 @@ pub fn create_http_client(timeout_secs: u64) -> Client {
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .default_headers({
             let mut headers = reqwest::header::HeaderMap::new();
-            headers.insert("Cookie", cookie_value.parse().unwrap());
+            if let Ok(parsed_value) = cookie_value.parse() {
+                headers.insert("Cookie", parsed_value);
+            }
             headers
         })
         .build();
@@ -38,7 +40,7 @@ pub fn create_http_client(timeout_secs: u64) -> Client {
 pub async fn split_http_response(res: Response) -> Result<ResponseParts, Box<dyn Error>> {
     let status = res.status();
     let headers = res.headers().clone();
-    let body = res.json().await?;
+    let body: serde_json::Value = res.json().await?;
 
     Ok(ResponseParts {
         status,
