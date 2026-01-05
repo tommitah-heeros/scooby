@@ -269,9 +269,18 @@ scooby db ui
 
 Description:
 
-- Intended to be implemented using [ratatui](https://github.com/ratatui-org/ratatui).
-- Shows a list of previous requests, with browsing and searching.
-- May support an "expert mode" to run raw SQL queries against Turso in the future.
+- Implemented using [ratatui](https://github.com/ratatui-org/ratatui).
+- Shows a list of previous requests on the left.
+- Displays the payload and response for the selected request on the right.
+- Supports a fullscreen mode for focusing on payload/response details.
+
+Key bindings:
+
+- `j` / `k` – Move selection up/down in the requests list (when not in fullscreen).
+- `Enter` – Toggle fullscreen mode (split payload/response view).
+- `Tab` – Switch focus between payload and response in fullscreen.
+- `Ctrl+u` / `Ctrl+d` – Scroll the focused pane up/down.
+- `q` – Quit the UI.
 
 Usage:
 
