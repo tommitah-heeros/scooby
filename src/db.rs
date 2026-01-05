@@ -187,7 +187,7 @@ impl Db {
     }
 
     pub async fn get_all_entries(&self) -> Result<Vec<ScoobyRequest>, Box<dyn Error>> {
-        const SQL_STR: &str = "SELECT * FROM requests";
+        const SQL_STR: &str = "SELECT * FROM requests ORDER BY created_at DESC";
 
         let mut rows = self.conn.query(SQL_STR, [1]).await?;
         let mut output = Vec::new();
