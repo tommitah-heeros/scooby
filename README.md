@@ -29,7 +29,7 @@ Requirements:
 ---
 
 ## Configuration
-Add a `auth_token` variable to your shell that populates a Cookie header.
+Add a `auth_token` variable to your shell that populates a Cookie header `export auth_token = "....."`.
 
 Make sure to configure your service names in `~/.config/scooby/config.toml` like the following:
 ```toml
