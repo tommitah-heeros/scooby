@@ -43,7 +43,11 @@ pub fn to_ui_displayable(data: Vec<ScoobyRequest>) -> Vec<UiDisplayRequest> {
         .map(|item| UiDisplayRequest {
             key: format!(
                 "{} {} {} {} {}",
-                item.method, item.service, item.route_url, item.created_at, item.route_url,
+                item.method,
+                item.service,
+                item.route_url,
+                item.created_at.format("%Y-%m-%d %H:%M:%S"),
+                item.route_url,
             ),
             content: item.payload_json.clone(),
             response: item.response_json.clone(),
