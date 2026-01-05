@@ -24,6 +24,12 @@ impl Ui {
     }
 }
 
+enum FocusedWidget {
+    List,
+    Payload,
+    Response,
+}
+
 /// Application state (which item is selected, etc.)
 struct App {
     item_ids: Vec<String>,
@@ -31,6 +37,9 @@ struct App {
     item_responses: HashMap<String, Option<serde_json::Value>>,
     selected: usize,
     fullscreen: bool,
+    payload_scroll: u16,
+    response_scroll: u16,
+    focused_widget: FocusedWidget,
 }
 
 impl App {
@@ -54,17 +63,20 @@ impl App {
                 .collect(),
             selected: 0,
             fullscreen: false,
+            payload_scroll: 0,
+            response_scroll: 0,
+            focused_widget: FocusedWidget::List,
         }
     }
 
     fn next(&mut self) {
-        if !self.item_ids.is_empty() {
+        if !self.item_ids.is_empty() && !self.fullscreen {
             self.selected = (self.selected + 1) % self.item_ids.len();
         }
     }
 
     fn previous(&mut self) {
-        if !self.item_ids.is_empty() {
+        if !self.item_ids.is_empty() && !self.fullscreen {
             if self.selected == 0 {
                 self.selected = self.item_ids.len() - 1;
             } else {
@@ -76,6 +88,34 @@ impl App {
     fn toggle_fullscreen(&mut self) {
         self.fullscreen = !self.fullscreen;
     }
+
+    fn scroll_focused(&mut self, delta: i16) {
+        match self.focused_widget {
+            FocusedWidget::Payload => {
+                let new = self.payload_scroll as i16 + delta;
+                self.payload_scroll = new.max(0) as u16;
+            }
+            FocusedWidget::Response => {
+                let new = self.response_scroll as i16 + delta;
+                self.response_scroll = new.max(0) as u16;
+            }
+            // don't do anything for list
+            _ => {}
+        }
+    }
+
+    fn focus_next(&mut self) {
+        if self.fullscreen {
+            // in fullscreen, only Payload <-> Response are meaningful
+            self.focused_widget = match self.focused_widget {
+                FocusedWidget::Payload => FocusedWidget::Response,
+                FocusedWidget::Response => FocusedWidget::Payload,
+                // if fullscreen but focus is somehow on List, move to Payload.
+                FocusedWidget::List => FocusedWidget::Payload,
+            }
+        }
+        // in normal mode do nothing
+    }
 }
 
 struct Grid<'a> {
@@ -84,6 +124,9 @@ struct Grid<'a> {
     item_responses: &'a HashMap<String, Option<serde_json::Value>>,
     selected: usize,
     fullscreen: bool,
+    payload_scroll: u16,
+    response_scroll: u16,
+    focused_widget: &'a FocusedWidget,
 }
 
 impl Widget for Grid<'_> {
@@ -110,11 +153,6 @@ impl Widget for Grid<'_> {
                 }
             };
 
-            let payload_widget = Paragraph::new(payload_content)
-                .block(Block::default().borders(Borders::ALL).title("Payload"));
-
-            payload_widget.render(left_area, buf);
-
             let response_content = if self.item_ids.is_empty() {
                 "No requests".to_string()
             } else {
@@ -127,9 +165,31 @@ impl Widget for Grid<'_> {
                 }
             };
 
-            let response_widget = Paragraph::new(response_content)
-                .block(Block::default().borders(Borders::ALL).title("Response"));
+            let mut payload_block = Block::default().borders(Borders::ALL).title("Payload");
+            let mut response_block = Block::default().borders(Borders::ALL).title("Response");
+            if matches!(self.focused_widget, FocusedWidget::Payload) {
+                payload_block = payload_block.border_style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                );
+            }
+            if matches!(self.focused_widget, FocusedWidget::Response) {
+                response_block = response_block.border_style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                );
+            }
 
+            let payload_widget = Paragraph::new(payload_content)
+                .block(payload_block)
+                .scroll((self.payload_scroll, 0));
+            let response_widget = Paragraph::new(response_content)
+                .block(response_block)
+                .scroll((self.response_scroll, 0));
+
+            payload_widget.render(left_area, buf);
             response_widget.render(right_area, buf);
         } else {
             // Original grid view
@@ -165,8 +225,8 @@ impl Widget for Grid<'_> {
                 })
                 .collect();
 
-            let list =
-                List::new(items).block(Block::default().borders(Borders::ALL).title("Requests"));
+            let list_block = Block::default().borders(Borders::ALL).title("Requests");
+            let list = List::new(items).block(list_block);
 
             list.render(left_area, buf);
 
@@ -182,8 +242,10 @@ impl Widget for Grid<'_> {
                 }
             };
 
+            let payload_block = Block::default().borders(Borders::ALL).title("Payload");
             let payload_widget = Paragraph::new(payload_content)
-                .block(Block::default().borders(Borders::ALL).title("Payload"));
+                .block(payload_block)
+                .scroll((self.payload_scroll, 0));
 
             payload_widget.render(right_top, buf);
 
@@ -199,8 +261,10 @@ impl Widget for Grid<'_> {
                 }
             };
 
+            let response_block = Block::default().borders(Borders::ALL).title("Response");
             let response_widget = Paragraph::new(response_content)
-                .block(Block::default().borders(Borders::ALL).title("Response"));
+                .block(response_block)
+                .scroll((self.response_scroll, 0));
 
             response_widget.render(right_bottom, buf);
         }
@@ -222,6 +286,21 @@ fn ui_application(terminal: &mut DefaultTerminal, db: &Db) -> std::io::Result<()
                 KeyCode::Char('j') => app.next(),
                 KeyCode::Char('k') => app.previous(),
                 KeyCode::Enter => app.toggle_fullscreen(),
+                KeyCode::Tab => app.focus_next(),
+                KeyCode::Char('u')
+                    if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                {
+                    app.scroll_focused(-1)
+                }
+                KeyCode::Char('d')
+                    if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                {
+                    app.scroll_focused(1)
+                }
                 _ => {}
             }
         }
@@ -235,6 +314,9 @@ fn render(frame: &mut Frame, app: &App) {
         item_responses: &app.item_responses,
         selected: app.selected,
         fullscreen: app.fullscreen,
+        payload_scroll: app.payload_scroll,
+        response_scroll: app.response_scroll,
+        focused_widget: &app.focused_widget,
     };
     frame.render_widget(grid, frame.area());
 }
