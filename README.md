@@ -117,6 +117,13 @@ scooby req <METHOD> <SERVICE> <ROUTE_URL> [FLAGS]
 
 ### Flags
 
+- `-b, --base <DOMAIN_URL>`
+
+  Domain base url.
+
+  - By default `scooby` looks for a value in `config.toml`: `domain_url = "https://my.domain.com"`
+  - If domain url depends on `ENV`, use (exactly) the following in your `config.toml`: `domain_url = "https://my.[SERVER_ENV].domain.com"`. Placement of tag doesn't matter, but naming is enforced.
+
 - `-d, --dev <DEV_PREFIX>`
 
   Dev-stack prefix for dev/test environments.
