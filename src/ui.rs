@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::db::{Db, to_ui_displayable};
+use colored::Colorize;
 use ratatui::layout::{Constraint, Direction};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{List, ListItem, Widget};
@@ -46,7 +47,11 @@ impl App {
     async fn new(db: &Db) -> Self {
         let data = match db.get_all_entries().await {
             Ok(data) => data,
-            Err(err) => panic!("No data to be rendered: {}", err),
+            Err(err) => {
+                eprintln!("{}: {}", Colorize::red("No data to be rendered"), err);
+                eprintln!("Exiting...");
+                std::process::exit(1)
+            }
         };
 
         let display_data = to_ui_displayable(data);

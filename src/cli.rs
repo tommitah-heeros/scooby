@@ -52,6 +52,10 @@ pub struct ReqCommand {
     #[arg()]
     pub route_url: String,
 
+    /// Base domain url, read from config by default
+    #[arg(short('b'), long("base"), default_value("domain_url"))]
+    pub domain_url: String,
+
     /// Dev-stack prefix, defaults to "tommitah-"
     #[arg(short('d'), long("dev"), default_value(""))]
     pub dev_prefix: String,

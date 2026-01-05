@@ -118,17 +118,23 @@ impl Db {
             fs::create_dir_all(local_db_path.clone())
                 .await
                 .unwrap_or_else(|err| {
-                    panic!(
-                        "Failed to create scooby db directory at {}: {}",
+                    eprintln!(
+                        "Failed to create a scooby db directory at {}: {}",
                         local_db_path, err
-                    )
+                    );
+                    eprintln!("Exiting...");
+                    std::process::exit(1)
                 })
         }
 
         let full_path = format!("{}/{}", local_db_path, "dooby.db");
         let db = match Builder::new_local(&full_path).build().await {
             Ok(db) => db,
-            Err(err) => panic!("Local database connection failed with: {}", err),
+            Err(err) => {
+                eprintln!("Local database connection failed with: {}", err);
+                eprintln!("Exiting...");
+                std::process::exit(1)
+            }
         };
 
         let conn = match db.connect() {
@@ -181,7 +187,11 @@ impl Db {
                 ),
             )
             .await
-            .unwrap_or_else(|_| panic!("{}", "Ruh roh, couldn't store values in db!".red()));
+            .unwrap_or_else(|err| {
+                eprintln!("{}: {}", "Ruh roh, couldn't store valus in db!".red(), err);
+                eprintln!("Exiting...");
+                std::process::exit(1)
+            });
 
         Ok(())
     }
@@ -196,7 +206,9 @@ impl Db {
             let data = match Db::map_to_domain(row).await {
                 Ok(mapped) => mapped,
                 Err(err) => {
-                    panic!("Something went wrong mapping data to domain: {}", err)
+                    eprintln!("Something went wrong mapping data to domain: {}", err);
+                    eprintln!("Exiting...");
+                    std::process::exit(1)
                 }
             };
             output.push(data);
@@ -221,7 +233,9 @@ impl Db {
             let data = match Db::map_to_domain(row).await {
                 Ok(mapped) => mapped,
                 Err(err) => {
-                    panic!("Something went wrong mapping data to domain: {}", err)
+                    eprintln!("Something went wrong mapping data to domain: {}", err);
+                    eprintln!("Exiting...");
+                    std::process::exit(1)
                 }
             };
             output.push(data);
@@ -247,7 +261,9 @@ impl Db {
             let data = match Db::map_to_domain(row).await {
                 Ok(mapped) => mapped,
                 Err(err) => {
-                    panic!("Something went wrong mapping data to domain: {}", err)
+                    eprintln!("Something went wrong mapping data to domain: {}", err);
+                    eprintln!("Exiting...");
+                    std::process::exit(1)
                 }
             };
             output.push(data);

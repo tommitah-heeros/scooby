@@ -29,14 +29,19 @@ use ui::Ui;
 async fn handle_req_mode(cli: ReqCommand, cfg: Cfg) {
     let db = match Db::create_connection().await {
         Ok(db) => db,
-        Err(err) => panic!("{}: {}", Colorize::red("Ruh roh, db isn't working"), err),
+        Err(err) => {
+            eprintln!("{}: {}", Colorize::red("Ruh roh, db isn't working"), err);
+            eprintln!("Exiting...");
+            std::process::exit(1)
+        }
     };
 
     // service url parts are stored in config data, user gets to choose the option to use
     let service_name = cfg.get(&cli.service);
     let service_url = format!("{}{}", cfg.get(&cli.dev_prefix), service_name);
+    let domain_url = cfg.get(&cli.domain_url);
 
-    let base_url = format!("https://api.{}.heeros.com/", cli.server_env.as_ref());
+    let base_url = domain_url.replace("[SERVER_ENV]", cli.server_env.as_ref());
 
     let url = format!(
         "{}{}/{}{}",
@@ -105,7 +110,11 @@ async fn handle_req_mode(cli: ReqCommand, cfg: Cfg) {
                 }
             };
         }
-        Err(_) => panic!("Ruh roh, request errored!"),
+        Err(err) => {
+            eprintln!("{}: {}", Colorize::red("Ruh roh, request errored!"), err);
+            eprintln!("Exiting...");
+            std::process::exit(1)
+        }
     }
 }
 
@@ -119,7 +128,11 @@ fn date_to_utc_start(s: String) -> Result<DateTime<Utc>, chrono::ParseError> {
 async fn handle_db_mode(cli: DbCommand, cfg: Cfg) {
     let db = match Db::create_connection().await {
         Ok(db) => db,
-        Err(err) => panic!("{}: {}", Colorize::red("Ruh roh, db isn't working"), err),
+        Err(err) => {
+            eprintln!("{}: {}", Colorize::red("Ruh roh, db isn't working"), err);
+            eprintln!("Exiting...");
+            std::process::exit(1)
+        }
     };
 
     match cli {
@@ -127,7 +140,9 @@ async fn handle_db_mode(cli: DbCommand, cfg: Cfg) {
             let date_time = if let Ok(date_time) = date_to_utc_start(cli.time_range) {
                 date_time
             } else {
-                panic!("Something went wrong parsing date input")
+                eprintln!("Something went wrong parsing date input");
+                eprintln!("Exiting...");
+                std::process::exit(1)
             };
 
             let list = match db.get_all_entries_by_time_range(date_time).await {
@@ -146,7 +161,8 @@ async fn handle_db_mode(cli: DbCommand, cfg: Cfg) {
             let date_time = if let Ok(date_time) = date_to_utc_start(cli.time_range) {
                 date_time
             } else {
-                panic!("Something went wrong parsing date input")
+                eprintln!("Something went wrong parsing date input");
+                std::process::exit(1)
             };
 
             let list = match db
